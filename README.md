@@ -4,7 +4,7 @@ ChunkDedupe is a multi-threaded C++ deduplication engine that uses content-defin
 
 ---
 
-## ⚡ Quantified Impact Summary (Resume / Performance Highlights)
+## ⚡ Impact Summary
 
 > **Storage Efficiency**: Reclaimed **35.2% of storage** on a 5-version incremental backup corpus (100MB logical -> 64.8MB physical stored), achieving **nearly 3x higher deduplication ratio** than naive Fixed-Size Chunking (12.0% reduction).
 >
