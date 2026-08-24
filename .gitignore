@@ -1,10 +1,8 @@
 build/
+bin/
 store/
-store_bench_tmp/
-sample_data/
+store_*/
 *.exe
-*.o
 *.obj
-*.log
-tests/third_party/
-.vs/
+*.o
+*.a
