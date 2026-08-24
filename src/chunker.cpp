@@ -5,10 +5,10 @@
 
 namespace chunkdedupe {
 
-RollingHash::RollingHash(size_t window_size, uint64_t base)
-    : m_window_size(window_size), m_base(base), m_base_pow(1), m_hash(0) {
+RollingHash::RollingHash(size_t window_size, uint64_t base, uint64_t mod)
+    : m_window_size(window_size), m_base(base), m_mod(mod), m_base_pow(1), m_hash(0) {
     for (size_t i = 0; i < window_size - 1; ++i) {
-        m_base_pow *= m_base;
+        m_base_pow = (m_base_pow * m_base) % m_mod;
     }
 }
 
@@ -17,11 +17,13 @@ void RollingHash::Reset() {
 }
 
 void RollingHash::Eat(uint8_t in_byte) {
-    m_hash = m_hash * m_base + in_byte;
+    m_hash = (m_hash * m_base + in_byte) % m_mod;
 }
 
 void RollingHash::Update(uint8_t out_byte, uint8_t in_byte) {
-    m_hash = (m_hash - out_byte * m_base_pow) * m_base + in_byte;
+    uint64_t remove = (out_byte * m_base_pow) % m_mod;
+    uint64_t h = (m_hash >= remove) ? (m_hash - remove) : (m_hash + m_mod - remove);
+    m_hash = (h * m_base + in_byte) % m_mod;
 }
 
 Chunker::Chunker(ChunkerOptions options)
@@ -36,6 +38,21 @@ std::vector<ChunkInfo> Chunker::ChunkBuffer(
 ) const {
     std::vector<ChunkInfo> chunks;
     if (length == 0) {
+        return chunks;
+    }
+
+    if (m_options.mode == ChunkingMode::FIXED_SIZE) {
+        size_t chunk_start = 0;
+        while (chunk_start < length) {
+            size_t chunk_len = std::min(m_options.target_chunk_size, length - chunk_start);
+            ChunkInfo info;
+            info.offset = base_offset + chunk_start;
+            info.length = static_cast<uint32_t>(chunk_len);
+            info.data.assign(data + chunk_start, data + chunk_start + chunk_len);
+            info.hash = ComputeSHA256(info.data);
+            chunks.push_back(std::move(info));
+            chunk_start += chunk_len;
+        }
         return chunks;
     }
 
@@ -83,6 +100,12 @@ std::vector<ChunkInfo> Chunker::ChunkBuffer(const std::vector<uint8_t>& buffer, 
 size_t Chunker::FindNextBoundary(const uint8_t* data, size_t length, size_t start_pos) const {
     if (start_pos >= length) return length;
 
+    if (m_options.mode == ChunkingMode::FIXED_SIZE) {
+        size_t rem = start_pos % m_options.target_chunk_size;
+        if (rem == 0) return start_pos;
+        return std::min(length, start_pos + (m_options.target_chunk_size - rem));
+    }
+
     RollingHash hasher(m_options.window_size);
     size_t chunk_start = 0;
 
@@ -110,19 +133,6 @@ size_t Chunker::FindNextBoundary(const uint8_t* data, size_t length, size_t star
     }
 
     return length;
-}
-
-std::vector<ChunkInfo> Chunker::ChunkSegment(
-    const uint8_t* data,
-    size_t segment_offset,
-    size_t segment_length,
-    const uint8_t* lookbehind_data,
-    size_t lookbehind_length,
-    uint64_t base_file_offset
-) const {
-    (void)lookbehind_data;
-    (void)lookbehind_length;
-    return ChunkBuffer(data + segment_offset, segment_length, base_file_offset + segment_offset, data);
 }
 
 } // namespace chunkdedupe

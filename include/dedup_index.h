@@ -6,6 +6,7 @@
 #include <unordered_map>
 #include <mutex>
 #include <cstdint>
+#include <vector>
 
 namespace chunkdedupe {
 
@@ -34,6 +35,12 @@ struct StorageStats {
     }
 };
 
+struct IndexLookupStats {
+    size_t total_entries = 0;
+    double avg_lookup_us = 0.0;
+    double p99_lookup_us = 0.0;
+};
+
 class DedupIndex {
 public:
     DedupIndex() = default;
@@ -53,13 +60,16 @@ public:
     // Retrieves metadata for a chunk hash
     bool GetChunkMeta(const std::string& hash, ChunkMeta& out_meta) const;
 
+    // Measures average and p99 hash lookup latency across num_queries lookups
+    IndexLookupStats MeasureLookupLatency(size_t num_queries = 10000) const;
+
     // Returns a snapshot of the current storage statistics
     StorageStats GetStats() const;
 
     // Clears the entire index
     void Clear();
 
-    // Persists index state to disk (simple JSON / text format)
+    // Persists index state to disk (simple text format)
     bool SaveToFile(const std::string& filepath) const;
 
     // Loads index state from disk

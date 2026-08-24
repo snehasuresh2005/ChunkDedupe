@@ -3,6 +3,8 @@
 #include <sstream>
 #include <iomanip>
 #include <iostream>
+#include <chrono>
+#include <algorithm>
 
 namespace chunkdedupe {
 
@@ -65,6 +67,45 @@ bool DedupIndex::GetChunkMeta(const std::string& hash, ChunkMeta& out_meta) cons
         return true;
     }
     return false;
+}
+
+IndexLookupStats DedupIndex::MeasureLookupLatency(size_t num_queries) const {
+    std::lock_guard<std::mutex> lock(m_mutex);
+
+    IndexLookupStats stats;
+    stats.total_entries = m_index.size();
+    if (m_index.empty() || num_queries == 0) return stats;
+
+    std::vector<std::string> keys;
+    keys.reserve(std::min(num_queries, m_index.size()));
+    for (const auto& [hash, meta] : m_index) {
+        keys.push_back(hash);
+        if (keys.size() >= num_queries) break;
+    }
+
+    std::vector<double> latencies_us;
+    latencies_us.reserve(keys.size());
+
+    for (const auto& k : keys) {
+        auto t1 = std::chrono::high_resolution_clock::now();
+        auto it = m_index.find(k);
+        (void)it;
+        auto t2 = std::chrono::high_resolution_clock::now();
+        double us = std::chrono::duration<double, std::micro>(t2 - t1).count();
+        latencies_us.push_back(us);
+    }
+
+    std::sort(latencies_us.begin(), latencies_us.end());
+
+    double sum = 0.0;
+    for (double d : latencies_us) sum += d;
+    stats.avg_lookup_us = sum / latencies_us.size();
+
+    size_t p99_idx = static_cast<size_t>(latencies_us.size() * 0.99);
+    if (p99_idx >= latencies_us.size()) p99_idx = latencies_us.size() - 1;
+    stats.p99_lookup_us = latencies_us[p99_idx];
+
+    return stats;
 }
 
 StorageStats DedupIndex::GetStats() const {

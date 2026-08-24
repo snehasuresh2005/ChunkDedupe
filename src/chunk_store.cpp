@@ -30,7 +30,6 @@ bool ChunkStore::WriteChunk(const ChunkInfo& chunk) {
     std::string path = GetChunkPath(chunk.hash);
     fs::create_directories(fs::path(path).parent_path());
 
-    // Skip if already exists on disk
     if (fs::exists(path)) {
         return true;
     }
@@ -41,7 +40,9 @@ bool ChunkStore::WriteChunk(const ChunkInfo& chunk) {
     }
 
     file.write(reinterpret_cast<const char*>(chunk.data.data()), chunk.data.size());
-    return file.good();
+    bool ok = file.good();
+    file.close();
+    return ok;
 }
 
 bool ChunkStore::ReadChunk(const std::string& hash, std::vector<uint8_t>& out_bytes) const {
@@ -58,7 +59,9 @@ bool ChunkStore::ReadChunk(const std::string& hash, std::vector<uint8_t>& out_by
     if (size > 0) {
         file.read(reinterpret_cast<char*>(out_bytes.data()), size);
     }
-    return file.good() || size == 0;
+    bool ok = file.good() || size == 0;
+    file.close();
+    return ok;
 }
 
 bool ChunkStore::SaveManifest(const FileManifest& manifest) const {
@@ -85,6 +88,7 @@ bool ChunkStore::SaveManifest(const FileManifest& manifest) const {
 
     file << "  ]\n";
     file << "}\n";
+    file.close();
     return true;
 }
 
@@ -128,6 +132,7 @@ bool ChunkStore::LoadManifest(const std::string& file_id, FileManifest& out_mani
         }
     }
 
+    file.close();
     return !out_manifest.chunk_hashes.empty() || out_manifest.total_size == 0;
 }
 
@@ -162,7 +167,6 @@ bool ChunkStore::ReconstructFile(
 
     outfile.close();
 
-    // Compute reconstructed file SHA-256 and compare with original
     out_reconstructed_sha256 = ComputeSHA256File(output_path);
     bool matched = (out_reconstructed_sha256 == manifest.original_sha256);
 
