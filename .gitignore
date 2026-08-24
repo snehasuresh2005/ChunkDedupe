@@ -1,0 +1,10 @@
+build/
+store/
+store_bench_tmp/
+sample_data/
+*.exe
+*.o
+*.obj
+*.log
+tests/third_party/
+.vs/

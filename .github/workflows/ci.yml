@@ -1,0 +1,41 @@
+name: ChunkDedupe CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build-and-test:
+    name: Build & Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup CMake and Build Tools (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake ninja-build
+
+      - name: Configure CMake
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build ChunkDedupe
+        run: |
+          cmake --build build --config Release
+
+      - name: Run Fast Unit Tests (Pre-check-in)
+        run: |
+          ctest --test-dir build -C Release -L pre-checkin --output-on-failure
+
+      - name: Run Integration Tests (Post-check-in)
+        run: |
+          ctest --test-dir build -C Release -L post-checkin --output-on-failure
